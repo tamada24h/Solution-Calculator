@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#133b35"><title>溶液仕込みプランナー</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+<header><div><span class="eyebrow">SOLUTION PREP</span><h1>溶液仕込みプランナー</h1></div><div class="header-actions"><button id="shareBtn" class="text-btn primary-action">共有</button><button id="resetBtn" class="text-btn">リセット</button></div></header>
+<main>
+<section class="hero"><div><span class="step">01 / 設計</span><h2>作りたい溶液を<br>まとめて入力</h2></div><p>各物質は全溶液分を一度に秤量し、最も高い目標濃度のマスター液として調製します。</p></section>
+<section class="panel setup">
+  <div class="section-head"><div><span class="eyebrow">SUBSTANCES</span><h3>物質</h3></div><button id="addSolute" class="outline">＋ 物質を追加</button></div>
+  <div id="soluteList" class="chips"></div>
+</section>
+<section class="panel">
+  <div class="section-head"><div><span class="eyebrow">SOLUTIONS</span><h3>目的溶液</h3></div><button id="addSolution" class="outline">＋ 溶液を追加</button></div>
+  <div id="solutionList" class="solutions"></div>
+</section>
+<button id="designMasters" class="calculate">次へ：マスター液を設計 <span>→</span></button>
+<section id="masterStage" class="stage-section" hidden><div class="stage-heading"><span class="step">02 / マスター設計</span><h2>マスター濃度を決める</h2><p>目的溶液から調製可能な濃度を自動提案します。必要に応じて値を変更してください。</p></div><div id="masterDesignList" class="master-design-grid"></div><button id="calculate" class="calculate">仕込み方法を計算する <span>→</span></button></section>
+<section id="results" class="results" aria-live="polite"></section>
+</main>
+<template id="soluteTemplate"><div class="solute-chip"><input class="solute-name" aria-label="物質名"><button class="remove" aria-label="削除">×</button></div></template>
+<template id="solutionTemplate"><article class="solution-card"><div class="card-head"><div class="number"></div><input class="solution-name" aria-label="溶液名"><button class="remove" aria-label="削除">×</button></div><label class="volume-label">最終液量<div class="with-unit"><input class="solution-volume" type="number" min="0" step="any"><span>µL</span></div></label><div class="concentrations"></div></article></template>
+<dialog id="shareDialog"><div class="share-panel"><div class="share-head"><div><span class="eyebrow">SHARE PLAN</span><h3>スマホへ共有</h3></div><button id="closeShare" class="remove" aria-label="閉じる">×</button></div><p>現在の入力内容を含むURLです。URLを開くと同じ仕込み条件が復元されます。</p><label class="share-url-label">共有URL<textarea id="shareUrl" readonly rows="3"></textarea></label><button id="copyUrl" class="calculate share-copy">URLをコピー</button><div class="qr-wrap"><div id="qrCode"></div><p id="qrMessage"></p></div><small>共有先には物質名・液量・濃度が渡ります。実秤量値は共有しません。</small></div></dialog>
+<footer>濃度は mg/mL、液量は µL、重量は mg で計算します。体積加成性を仮定した計算支援ツールです。</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.1.0/qrcode.min.js"></script>
+<script src="app.js"></script>
+</body></html>
