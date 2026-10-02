@@ -62,11 +62,17 @@ function seedByMode(){
   }
 }
 
+function htmlNode(html){
+  const d=document.createElement('div');
+  d.innerHTML=html.trim();
+  return d.firstElementChild;
+}
+
 function addSolute(name){
-  const node=$('#soluteTemplate').content.firstElementChild.cloneNode(true);
+  const id=`m${++state.soluteSeq}`;
+  const safe=esc(name||`物質 ${String.fromCharCode(65+state.soluteSeq)}`);
+  const node=htmlNode(`<div class="solute-chip"><input class="solute-name" aria-label="物質名" data-id="${id}" value="${safe}"><button class="remove" aria-label="削除">×</button></div>`);
   const input=node.querySelector('.solute-name');
-  input.value=name||`物質 ${String.fromCharCode(65+state.soluteSeq)}`;
-  input.dataset.id=`m${++state.soluteSeq}`;
   input.oninput=renderFields;
   node.querySelector('.remove').onclick=()=>{
     if($$('.solute-chip').length<=1)return;
@@ -99,12 +105,18 @@ function updateSolutionCard(card){
 }
 
 function addSolution(name,volume=1000,extras={}){
-  const node=$((state.mode==='generic'?'solutionTemplateGeneric':'solutionTemplatePsc')).content.firstElementChild.cloneNode(true);
-  node.dataset.id=`s${++state.solutionSeq}`;
-  node.querySelector('.solution-name').value=name||`溶液 ${state.solutionSeq}`;
-  node.querySelector('.solution-volume').value=volume;
+  const id=`s${++state.solutionSeq}`;
+  const safeName=esc(name||`溶液 ${state.solutionSeq}`);
+  const safeVol=esc(String(volume));
+  let html;
+  if(state.mode==='generic'){
+    html=`<article class="solution-card" data-id="${id}"><div class="card-head"><div class="number"></div><input class="solution-name" aria-label="溶液名" value="${safeName}"><button class="remove" aria-label="削除">×</button></div><label class="volume-label">最終液量<div class="with-unit"><input class="solution-volume" type="number" min="0" step="any" value="${safeVol}"><span>µL</span></div></label><div class="concentrations"></div></article>`;
+  }else{
+    const total=concFmt(extras.totalConc||16);
+    html=`<article class="solution-card" data-id="${id}"><div class="card-head"><div class="number"></div><input class="solution-name" aria-label="溶液名" value="${safeName}"><button class="remove" aria-label="削除">×</button></div><label class="volume-label">最終液量<div class="with-unit"><input class="solution-volume" type="number" min="0" step="any" value="${safeVol}"><span>µL</span></div></label><label class="volume-label">全濃度<div class="with-unit"><input class="solution-total-conc" type="number" min="0" step="0.1" value="${total}"><span>mg/mL</span></div></label><div class="concentrations"></div><label class="volume-label">溶媒組成<select class="solution-solvent"><option value="CB">CB 100%</option><option value="CB-DIO-3">CB:DIO = 97:3</option><option value="CB-DIO-2">CB:DIO = 98:2</option><option value="CB-DIO-1">CB:DIO = 99:1</option></select></label></article>`;
+  }
+  const node=htmlNode(html);
   if(state.mode==='psc'){
-    node.querySelector('.solution-total-conc').value=concFmt(extras.totalConc||16);
     node.querySelector('.solution-solvent').value=extras.solvent||'CB';
   }
   const ids=$$('.solute-name').map(x=>x.dataset.id);
