@@ -417,21 +417,23 @@ function saveUserPreset(){
 function loadSelectedPreset(){
   const val=$('#presetSelect').value;
   if(!val)return;
-  clearAll();
-  if(BUILTIN[val]){
-    const b=BUILTIN[val];
-    applyModeUI(b.mode);
-    $('#modeDescription').textContent=b.desc||'';
-    b.solutes.forEach(n=>addSolute(n));
-    b.solutions.forEach(s=>addSolution(s[0],s[1],b.mode==='generic'?{concs:s[3]}:{totalConc:s[2],ratios:s[3],solvent:s[4]}));
-    return;
-  }
-  const list=JSON.parse(localStorage.getItem('solutionPresets')||'[]');
-  const p=list[Number(val)];
-  if(!p)return;
-  applyModeUI(p.mode);
-  p.solutes.forEach(n=>addSolute(n));
-  p.solutions.forEach(s=>addSolution(s[0],s[1],p.mode==='generic'?{concs:s[2]}:{totalConc:s[2],ratios:s[3],solvent:s[4]}));
+  try{
+    clearAll();
+    if(BUILTIN[val]){
+      const b=BUILTIN[val];
+      applyModeUI(b.mode);
+      $('#modeDescription').textContent=b.desc||'';
+      b.solutes.forEach(n=>addSolute(n));
+      b.solutions.forEach(s=>addSolution(s[0],s[1],b.mode==='generic'?{concs:s[3]}:{totalConc:s[2],ratios:s[3],solvent:s[4]}));
+      return;
+    }
+    const list=JSON.parse(localStorage.getItem('solutionPresets')||'[]');
+    const p=list[Number(val)];
+    if(!p)return;
+    applyModeUI(p.mode);
+    p.solutes.forEach(n=>addSolute(n));
+    p.solutions.forEach(s=>addSolution(s[0],s[1],p.mode==='generic'?{concs:s[2]}:{totalConc:s[2],ratios:s[3],solvent:s[4]}));
+  }catch(e){showError('プリセット読み込み中にエラーが発生しました：'+e.message);console.error(e);}
 }
 
 function deleteSelectedPreset(){
@@ -461,6 +463,7 @@ $('#resetBtn').onclick=reset;
 $('#shareBtn').onclick=openShare;
 $('#closeShare').onclick=()=>$('#shareDialog').close();
 $('#copyUrl').onclick=copyUrl;
+$('#presetSelect').onchange=loadSelectedPreset;
 $('#loadPreset').onclick=loadSelectedPreset;
 $('#savePreset').onclick=saveUserPreset;
 $('#deletePreset').onclick=deleteSelectedPreset;
