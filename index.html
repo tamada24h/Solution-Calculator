@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#133b35"><title>溶液仕込みプランナー</title><link rel="stylesheet" href="styles.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#133b35"><title>溶液仕込みプランナー</title><link rel="stylesheet" href="styles.css?v=1"></head>
 <body>
 <header><div><span class="eyebrow">SOLUTION PREP</span><h1>溶液仕込みプランナー</h1></div><div class="header-actions"><a id="editLink" class="text-btn" href="https://github.com/tamada24h/Solution-Calculator" target="_blank" rel="noopener">GitHubで編集</a><button id="shareBtn" class="text-btn primary-action">共有</button><button id="resetBtn" class="text-btn">リセット</button></div></header>
 <main>
@@ -29,5 +29,5 @@
 <dialog id="shareDialog"><div class="share-panel"><div class="share-head"><div><span class="eyebrow">SHARE PLAN</span><h3>スマホへ共有</h3></div><button id="closeShare" class="remove" aria-label="閉じる">×</button></div><p>現在の入力内容を含むURLです。URLを開くと同じ仕込み条件が復元されます。</p><label class="share-url-label">共有URL<textarea id="shareUrl" readonly rows="3"></textarea></label><button id="copyUrl" class="calculate share-copy">URLをコピー</button><div class="qr-wrap"><div id="qrCode"></div><p id="qrMessage"></p></div><small>共有先には物質名・液量・濃度が渡ります。実秤量値は共有しません。</small></div></dialog>
 <footer>濃度は mg/mL、液量は µL、重量は mg で計算します。体積加成性を仮定した計算支援ツールです。</footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.1.0/qrcode.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=1"></script>
 </body></html>
