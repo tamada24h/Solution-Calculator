@@ -321,12 +321,11 @@ function showError(msg){
 
 function sharePayload(){
   const {solutes,solutions}=readData();
-  const m=solutes.map(s=>s.name);
   const s=solutions.map(sol=>{
-    if(state.mode==='generic')return[sol.name,sol.volume,m.map(id=>sol.concs[id]||0)];
-    return[sol.name,sol.volume,sol.totalConc,m.map(id=>sol.ratios[id]||0),sol.solventCode||'CB'];
+    if(state.mode==='generic')return[sol.name,sol.volume,solutes.map(m=>sol.concs[m.id]||0)];
+    return[sol.name,sol.volume,sol.totalConc,solutes.map(m=>sol.ratios[m.id]||0),sol.solventCode||'CB'];
   });
-  return{v:state.mode==='generic'?2:3,mode:state.mode,m,s};
+  return{v:state.mode==='generic'?2:4,mode:state.mode,m:solutes.map(s=>s.name),s};
 }
 
 function encodePayload(data){
@@ -351,12 +350,16 @@ function openShare(){
   $('#qrMessage').textContent='';
   try{
     if(typeof qrcode!=='function')throw new Error('library');
-    const qr=qrcode(0,'M');
+    let qr=qrcode(0,'M');
     qr.addData(url);
-    qr.make();
-    $('#qrCode').innerHTML=qr.createSvgTag(5,8);
+    try{qr.make();}catch(_){
+      qr=qrcode(0,'L');
+      qr.addData(url);
+      qr.make();
+    }
+    $('#qrCode').innerHTML=qr.createSvgTag(4,8);
   }catch(e){
-    $('#qrMessage').textContent=e.message.includes('overflow')?'入力内容が多いためQRコードに収まりません。URLコピーを使用してください。':'QRコードを作成できません。インターネット接続を確認してください。';
+    $('#qrMessage').textContent=e.message.includes('overflow')?'入力内容が多いためQRコードに収まりません。URLコピーを使用してください。':'QRコードを作成できません。';
   }
   $('#shareDialog').showModal();
 }
@@ -376,7 +379,7 @@ function restoreShared(){
   if(!match)return false;
   try{
     const data=decodePayload(match[1]);
-    if(data.v===3){
+    if(data.v===4||data.v===3){
       applyModeUI(data.mode||'generic');
       clearAll();
       data.m.forEach(n=>addSolute(String(n||'')));
