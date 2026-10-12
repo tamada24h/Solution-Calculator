@@ -47,8 +47,10 @@ function clearAll(){
 }
 
 function setMode(mode){
+  rememberCurrent();
   applyModeUI(mode);
   seedByMode();
+  saveDraft();
 }
 
 function seedByMode(){
@@ -152,6 +154,12 @@ function targetConc(sol,m){
 }
 
 function baseFrac(sol){return state.mode==='generic'?1:(1-sol.solvent.frac);}
+function usesAutoProposal(){return $('#autoProposal').checked;}
+function updateProposalDescription(){
+  $('#proposalDescription').textContent=usesAutoProposal()
+    ?'目的濃度と最終液量から、調製可能なマスター濃度を自動提案します。'
+    :'各目的溶液の濃度と最終液量を入力し、使用するマスター濃度を手動指定します。必要量に応じた分注量と分配比を計算します。';
+}
 
 function readData(){
   const solutes=readSolutes();
@@ -189,7 +197,10 @@ function designMasters(){
     const load=masters.reduce((sum,m)=>sum+(m.targetMax>0&&targetConc(s,m)>0?targetConc(s,m)/m.targetMax:0),0);
     return load/Math.max(1e-9,baseFrac(s));
   }));
-  masters.forEach(m=>{m.masterConc=ceilConc(m.targetMax*factor);m.entered=m.masterConc});
+  masters.forEach(m=>{
+    m.masterConc=usesAutoProposal()?ceilConc(m.targetMax*factor):0;
+    m.entered=m.masterConc;
+  });
   renderMasterDesign(masters);
   $('#masterStage').hidden=false;
   $('#results').innerHTML='';
@@ -200,8 +211,8 @@ function renderMasterDesign(masters){
   $('#masterDesignList').innerHTML=masters.filter(m=>m.required>0).map(m=>`
     <article class="master-design-card" data-design="${m.id}">
       <h3>${esc(m.name)}</h3>
-      <label>マスター濃度<div class="with-unit"><input class="master-concentration" type="number" min="0" step="0.1" value="${concFmt(m.masterConc)}"><span>mg/mL</span></div></label>
-      <div class="proposal"><span>最大目標濃度</span><b>${concFmt(m.targetMax)} mg/mL</b></div>
+      <label>マスター濃度<div class="with-unit"><input class="master-concentration" type="number" min="0" step="0.1" value="${m.masterConc>0?concFmt(m.masterConc):''}" placeholder="手動入力"><span>mg/mL</span></div></label>
+      <div class="proposal"><span>${usesAutoProposal()?'最大目標濃度':'必要最低濃度'}</span><b>${concFmt(m.targetMax)} mg/mL</b></div>
     </article>`).join('');
 }
 
@@ -217,12 +228,16 @@ function calculate(){
     return{id:m.id,name:m.name,targetMax,required,masterConc:entered,entered};
   });
   if(masters.every(m=>m.required<=0))return showError('少なくとも1つの濃度または重量比を入力してください。');
-  masters.forEach(m=>{if(m.required&&(m.masterConc<=0||m.masterConc<m.targetMax))m.masterConc=ceilConc(m.targetMax)});
+  if(!usesAutoProposal()&&masters.some(m=>m.required&&(!Number.isFinite(m.masterConc)||m.masterConc<=0)))return showError('使用するマスター濃度をすべて入力してください。');
+  if(usesAutoProposal())masters.forEach(m=>{if(m.required&&(m.masterConc<=0||m.masterConc<m.targetMax))m.masterConc=ceilConc(m.targetMax)});
   const volumeFactor=Math.max(1,...solutions.map(s=>{
     const load=masters.reduce((sum,m)=>sum+(m.required&&targetConc(s,m)>0?targetConc(s,m)/m.masterConc:0),0);
     return load/Math.max(1e-9,baseFrac(s));
   }));
-  if(volumeFactor>1+1e-9)masters.forEach(m=>{if(m.required)m.masterConc=ceilConc(m.masterConc*volumeFactor)});
+  if(volumeFactor>1+1e-9){
+    if(!usesAutoProposal())return showError('入力したマスター濃度では分注量が使用可能な溶媒量を超えます。マスター濃度を高くしてください。');
+    masters.forEach(m=>{if(m.required)m.masterConc=ceilConc(m.masterConc*volumeFactor)});
+  }
   const changes=masters.filter(m=>m.required&&Math.abs(m.masterConc-m.entered)>1e-9).map(m=>({name:m.name,from:m.entered,to:m.masterConc}));
   masters.forEach(m=>{
     const input=document.querySelector(`[data-design="${m.id}"] .master-concentration`);
@@ -278,7 +293,8 @@ function updateAdjusted(masters,solutions){
       const c=targetConc(s,m);
       if(c<=0)return'';
       const amount=c*adjusted/m.masterConc;
-      return`<div><dt>${esc(m.name)}マスター</dt><dd>${fmt(amount)} µL</dd></div>`;
+      const distribution=m.required>0?c*s.volume/1000/m.required*100:0;
+      return`<div><dt>${esc(m.name)}マスター</dt><dd>${fmt(amount)} µL <small>分配比 ${fmt(distribution)}%</small></dd></div>`;
     }).join('');
     const used=masters.reduce((sum,m)=>sum+targetConc(s,m)*adjusted/m.masterConc,0);
     const baseFill=baseVol-used;
@@ -325,7 +341,7 @@ function sharePayload(){
     if(state.mode==='generic')return[sol.name,sol.volume,solutes.map(m=>sol.concs[m.id]||0)];
     return[sol.name,sol.volume,sol.totalConc,solutes.map(m=>sol.ratios[m.id]||0),sol.solventCode||'CB'];
   });
-  return{v:state.mode==='generic'?2:4,mode:state.mode,m:solutes.map(s=>s.name),s};
+  return{v:5,mode:state.mode,auto:usesAutoProposal(),m:solutes.map(s=>s.name),s};
 }
 
 function encodePayload(data){
@@ -343,31 +359,40 @@ function createShareUrl(){
   return url.href;
 }
 
+function makeQr(url){
+  let low=1,high=40,result=null;
+  while(low<=high){
+    const type=Math.floor((low+high)/2);
+    try{
+      const qr=qrcode(type,'L');
+      qr.addData(url,'Byte');
+      qr.make();
+      result=qr;
+      high=type-1;
+    }catch(e){
+      low=type+1;
+    }
+  }
+  return result;
+}
+
 function openShare(){
   const url=createShareUrl();
   $('#shareUrl').value=url;
   $('#qrCode').innerHTML='';
-  $('#qrMessage').textContent='';
-  try{
-    if(typeof qrcode!=='function')throw new Error('library');
-    const makeQr=(level)=>{
-      for(let t=1;t<=40;t++){
-        try{
-          const qr=qrcode(t,level);
-          qr.addData(url);
-          qr.make();
-          return qr;
-        }catch(_){}
-      }
-      return null;
-    };
-    const qr=makeQr('M')||makeQr('L');
-    if(!qr)throw new Error('overflow');
-    $('#qrCode').innerHTML=qr.createSvgTag(4,8);
-  }catch(e){
-    $('#qrMessage').textContent=e.message.includes('overflow')?'入力内容が多いためQRコードに収まりません。URLコピーを使用してください。':'QRコードを作成できません。';
-  }
+  $('#qrMessage').textContent='QRコードを作成しています…';
   $('#shareDialog').showModal();
+  setTimeout(()=>{
+    try{
+      if(typeof qrcode!=='function')throw new Error('QRライブラリを読み込めません。');
+      const qr=makeQr(url);
+      if(!qr)throw new Error('共有URLがQRコードの容量を超えています。');
+      $('#qrCode').innerHTML=qr.createSvgTag(3,6);
+      $('#qrMessage').textContent='';
+    }catch(e){
+      $('#qrMessage').textContent=`QRコードを作成できません：${e.message}`;
+    }
+  },0);
 }
 
 async function copyUrl(){
@@ -380,34 +405,67 @@ async function copyUrl(){
   setTimeout(()=>$('#copyUrl').textContent='URLをコピー',1600);
 }
 
+function restorePayload(data){
+  if(data.v===5||data.v===4||data.v===3){
+    applyModeUI(data.mode||'generic');
+    $('#autoProposal').checked=data.v===5?data.auto!==false:true;
+    updateProposalDescription();
+    clearAll();
+    data.m.forEach(n=>addSolute(String(n||'')));
+    if(state.mode==='generic')data.s.forEach(s=>addSolution(String(s[0]||''),Number(s[1])||1000,{concs:Array.isArray(s[2])?s[2]:[]}));
+    else data.s.forEach(s=>addSolution(String(s[0]||''),Number(s[1])||1000,{totalConc:Number(s[2])||16,ratios:Array.isArray(s[3])?s[3]:[],solvent:String(s[4]||'CB')}));
+    return true;
+  }
+  if([1,2].includes(data.v)){
+    applyModeUI('generic');
+    $('#autoProposal').checked=true;
+    updateProposalDescription();
+    clearAll();
+    data.m.forEach(m=>Array.isArray(m)?addSolute(String(m[0]||'')):addSolute(String(m)));
+    data.s.forEach(s=>addSolution(String(s[0]||''),Number(s[1])||1000,{concs:Array.isArray(s[2])?s[2]:[]}));
+    return true;
+  }
+  return false;
+}
+
 function restoreShared(){
   const match=location.hash.match(/^#p=(.+)$/);
   if(!match)return false;
   try{
-    const data=decodePayload(match[1]);
-    if(data.v===4||data.v===3){
-      applyModeUI(data.mode||'generic');
-      clearAll();
-      data.m.forEach(n=>addSolute(String(n||'')));
-      if(state.mode==='generic'){
-        data.s.forEach(s=>addSolution(String(s[0]||''),Number(s[1])||1000,{concs:Array.isArray(s[2])?s[2]:[]}));
-      }else{
-        data.s.forEach(s=>addSolution(String(s[0]||''),Number(s[1])||1000,{totalConc:Number(s[2])||16,ratios:Array.isArray(s[3])?s[3]:[],solvent:String(s[4]||'CB')}));
-      }
-      return true;
-    }
-    if([1,2].includes(data.v)){
-      applyModeUI('generic');
-      clearAll();
-      data.m.forEach(m=>Array.isArray(m)?addSolute(String(m[0]||'')):addSolute(String(m)));
-      data.s.forEach(s=>addSolution(String(s[0]||''),Number(s[1])||1000,{concs:Array.isArray(s[2])?s[2]:[]}));
-      return true;
-    }
-    throw new Error('invalid');
+    if(!restorePayload(decodePayload(match[1])))throw new Error('invalid');
+    saveDraft();
+    return true;
   }catch(e){
     setTimeout(()=>showError('共有URLのデータを読み込めませんでした。URLが途中で切れていないか確認してください。'));
     return false;
   }
+}
+
+function saveDraft(){
+  if(!$$('.solution-card').length)return;
+  localStorage.setItem('solutionDraft',JSON.stringify(sharePayload()));
+}
+
+function rememberCurrent(){
+  if(!$$('.solution-card').length)return;
+  localStorage.setItem('solutionPrevious',JSON.stringify(sharePayload()));
+  $('#restorePrevious').disabled=false;
+}
+
+function restoreStored(key){
+  try{
+    const data=JSON.parse(localStorage.getItem(key)||'null');
+    if(!data||!restorePayload(data))return false;
+    saveDraft();
+    return true;
+  }catch(e){return false;}
+}
+
+function restorePrevious(){
+  const current=$$('.solution-card').length?sharePayload():null;
+  if(!restoreStored('solutionPrevious'))return alert('戻せる条件がありません。');
+  if(current)localStorage.setItem('solutionPrevious',JSON.stringify(current));
+  $('#restorePrevious').disabled=false;
 }
 
 function loadPresets(){
@@ -439,6 +497,7 @@ function loadSelectedPreset(){
   const val=$('#presetSelect').value;
   if(!val)return;
   try{
+    rememberCurrent();
     clearAll();
     if(BUILTIN[val]){
       const b=BUILTIN[val];
@@ -446,6 +505,7 @@ function loadSelectedPreset(){
       $('#modeDescription').textContent=b.desc||'';
       b.solutes.forEach(n=>addSolute(n));
       b.solutions.forEach(s=>addSolution(s[0],s[1],b.mode==='generic'?{concs:s[3]}:{totalConc:s[2],ratios:s[3],solvent:s[4]}));
+      saveDraft();
       return;
     }
     const list=JSON.parse(localStorage.getItem('solutionPresets')||'[]');
@@ -454,6 +514,7 @@ function loadSelectedPreset(){
     applyModeUI(p.mode);
     p.solutes.forEach(n=>addSolute(n));
     p.solutions.forEach(s=>addSolution(s[0],s[1],p.mode==='generic'?{concs:s[2]}:{totalConc:s[2],ratios:s[3],solvent:s[4]}));
+    saveDraft();
   }catch(e){showError('プリセット読み込み中にエラーが発生しました：'+e.message);console.error(e);}
 }
 
@@ -470,6 +531,7 @@ function deleteSelectedPreset(){
 
 function reset(){
   if(!confirm('入力内容を初期状態に戻しますか？'))return;
+  rememberCurrent();
   history.replaceState(null,'',location.pathname+location.search);
   $('#presetSelect').value='';
   seedByMode();
@@ -488,6 +550,15 @@ $('#presetSelect').onchange=loadSelectedPreset;
 $('#loadPreset').onclick=loadSelectedPreset;
 $('#savePreset').onclick=saveUserPreset;
 $('#deletePreset').onclick=deleteSelectedPreset;
+$('#restorePrevious').onclick=restorePrevious;
+$('#autoProposal').onchange=()=>{
+  updateProposalDescription();
+  $('#masterStage').hidden=true;
+  $('#results').innerHTML='';
+  saveDraft();
+};
+document.addEventListener('input',saveDraft);
+document.addEventListener('change',saveDraft);
 window.addEventListener('hashchange',()=>{
   if(restoreShared()){
     $('#masterStage').hidden=true;
@@ -497,4 +568,5 @@ window.addEventListener('hashchange',()=>{
   }
 });
 loadPresets();
-if(!restoreShared())seedByMode();
+$('#restorePrevious').disabled=!localStorage.getItem('solutionPrevious');
+if(!restoreShared()&&!restoreStored('solutionDraft'))seedByMode();
