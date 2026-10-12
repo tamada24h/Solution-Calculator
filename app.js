@@ -350,13 +350,19 @@ function openShare(){
   $('#qrMessage').textContent='';
   try{
     if(typeof qrcode!=='function')throw new Error('library');
-    let qr=qrcode(0,'M');
-    qr.addData(url);
-    try{qr.make();}catch(_){
-      qr=qrcode(0,'L');
-      qr.addData(url);
-      qr.make();
-    }
+    const makeQr=(level)=>{
+      for(let t=1;t<=40;t++){
+        try{
+          const qr=qrcode(t,level);
+          qr.addData(url);
+          qr.make();
+          return qr;
+        }catch(_){}
+      }
+      return null;
+    };
+    const qr=makeQr('M')||makeQr('L');
+    if(!qr)throw new Error('overflow');
     $('#qrCode').innerHTML=qr.createSvgTag(4,8);
   }catch(e){
     $('#qrMessage').textContent=e.message.includes('overflow')?'入力内容が多いためQRコードに収まりません。URLコピーを使用してください。':'QRコードを作成できません。';
