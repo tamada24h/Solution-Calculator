@@ -353,9 +353,23 @@ function decodePayload(value){
   return JSON.parse(decodeURIComponent(escape(atob(base+'='.repeat((4-base.length%4)%4)))));
 }
 
-function createShareUrl(){
+async function createShareUrl(){
   const url=new URL(location.href);
-  url.hash=`p=${encodePayload(sharePayload())}`;
+  const payload=sharePayload();
+  try{
+    if(typeof CompressionStream==='function'){
+      const stream=new Blob([JSON.stringify(payload)]).stream().pipeThrough(new CompressionStream('gzip'));
+      const bytes=new Uint8Array(await new Response(stream).arrayBuffer());
+      let bin='';
+      bytes.forEach(b=>bin+=String.fromCharCode(b));
+      const b64=btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      if(b64.length<encodePayload(payload).length){
+        url.hash=`z=${b64}`;
+        return url.href;
+      }
+    }
+  }catch(e){}
+  url.hash=`p=${encodePayload(payload)}`;
   return url.href;
 }
 
@@ -376,18 +390,19 @@ function makeQr(url){
   return result;
 }
 
-function openShare(){
-  const url=createShareUrl();
-  $('#shareUrl').value=url;
-  $('#qrCode').innerHTML='';
-  $('#qrMessage').textContent='QRコードを作成しています…';
+async function openShare(){
   $('#shareDialog').showModal();
+  $('#qrCode').innerHTML='';
+  $('#qrMessage').textContent='共有URLを作成しています…';
+  const url=await createShareUrl();
+  $('#shareUrl').value=url;
+  $('#qrMessage').textContent='QRコードを作成しています…';
   setTimeout(()=>{
     try{
       if(typeof qrcode!=='function')throw new Error('QRライブラリを読み込めません。');
       const qr=makeQr(url);
       if(!qr)throw new Error('共有URLがQRコードの容量を超えています。');
-      $('#qrCode').innerHTML=qr.createSvgTag(3,6);
+      $('#qrCode').innerHTML=qr.createSvgTag(7,56);
       $('#qrMessage').textContent='';
     }catch(e){
       $('#qrMessage').textContent=`QRコードを作成できません：${e.message}`;
@@ -428,17 +443,35 @@ function restorePayload(data){
   return false;
 }
 
-function restoreShared(){
-  const match=location.hash.match(/^#p=(.+)$/);
-  if(!match)return false;
+async function decodeHash(){
+  const match=location.hash.match(/^#([pz])=(.+)$/);
+  if(!match)return null;
+  if(match[1]==='p')return decodePayload(match[2]);
+  const base=match[2].replace(/-/g,'+').replace(/_/g,'/');
+  const bytes=Uint8Array.from(atob(base+'='.repeat((4-base.length%4)%4)),c=>c.charCodeAt(0));
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(stream).text());
+}
+
+let restorePromise=null;
+async function restoreSharedAsync(){
   try{
-    if(!restorePayload(decodePayload(match[1])))throw new Error('invalid');
+    const data=await decodeHash();
+    if(!data)return false;
+    if(!restorePayload(data))throw new Error('invalid');
     saveDraft();
     return true;
   }catch(e){
     setTimeout(()=>showError('共有URLのデータを読み込めませんでした。URLが途中で切れていないか確認してください。'));
     return false;
   }
+}
+
+function restoreShared(){
+  const match=location.hash.match(/^#[pz]=/);
+  if(!match)return false;
+  restorePromise=restoreSharedAsync();
+  return true;
 }
 
 function saveDraft(){
