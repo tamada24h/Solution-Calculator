@@ -402,12 +402,22 @@ async function openShare(){
       if(typeof qrcode!=='function')throw new Error('QRライブラリを読み込めません。');
       const qr=makeQr(url);
       if(!qr)throw new Error('共有URLがQRコードの容量を超えています。');
-      $('#qrCode').innerHTML=qr.createSvgTag(7,56);
+      state.qr=qr;
+      $('#qrCode').innerHTML=qr.createSvgTag(5,40);
       $('#qrMessage').textContent='';
+      $('#enlargeQr').hidden=false;
     }catch(e){
       $('#qrMessage').textContent=`QRコードを作成できません：${e.message}`;
     }
   },0);
+}
+
+function enlargeQr(){
+  if(!state.qr)return;
+  const size=Math.min(innerWidth,innerHeight)-40;
+  const cell=Math.max(2,Math.floor((size-64)/state.qr.getModuleCount()));
+  $('#qrOverlayInner').innerHTML=state.qr.createSvgTag(cell,32);
+  $('#qrOverlay').hidden=false;
 }
 
 async function copyUrl(){
@@ -579,6 +589,8 @@ $('#resetBtn').onclick=reset;
 $('#shareBtn').onclick=openShare;
 $('#closeShare').onclick=()=>$('#shareDialog').close();
 $('#copyUrl').onclick=copyUrl;
+$('#enlargeQr').onclick=enlargeQr;
+$('#qrOverlay').onclick=()=>$('#qrOverlay').hidden=true;
 $('#presetSelect').onchange=loadSelectedPreset;
 $('#loadPreset').onclick=loadSelectedPreset;
 $('#savePreset').onclick=saveUserPreset;
